@@ -6,6 +6,13 @@ import numpy as np
 from typing import List, Dict, Any, Optional
 
 
+class LocalTextEmbeddingFunction:
+    """Lightweight deterministic embedding function for local demo use."""
+
+    def __call__(self, input: List[str]) -> List[List[float]]:
+        return [[float(sum(ord(ch) for ch in text) % 1000) / 1000.0] for text in input]
+
+
 # Initialize ChromaDB client
 client = chromadb.Client()
 
@@ -51,7 +58,7 @@ def load_food_data(file_path: str) -> List[Dict]:
         print(f"Error Loading food data: {e}")
     return[]
 
-def create_simialrity_search_collection(collection_name: str, collection_metadata: dict = None):
+def create_similarity_search_collection(collection_name: str, collection_metadata: dict = None):
     """Create or reset a Chroma collection for similarity search.
 
     Args:
@@ -69,7 +76,7 @@ def create_simialrity_search_collection(collection_name: str, collection_metadat
         pass
 
     sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model = "all-MiniLM-L6-v2"
+        model_name = "all-MiniLM-L6-v2"
     )
 
     # Create new Collection
@@ -83,7 +90,7 @@ def create_simialrity_search_collection(collection_name: str, collection_metadat
         
     )
 
-def populate_similarity_search(collection, food_items: List[Dict]):
+def populate_similarity_collection(collection, food_items: List[Dict]):
     """Populate a Chroma collection with food documents and metadata.
 
     Args:
@@ -95,24 +102,31 @@ def populate_similarity_search(collection, food_items: List[Dict]):
     metadatas = []
     ids = []
     
-    used_ids = ()
+    used_ids = set()
 
     for i, food in enumerate(food_items):
-        text = f"Nmae: {food[food_name]}. "
-        text += f"Description: {food.get(food_description, "")}. "
-        text += f"Ingredients: {", ".join(food.get(food_ingredients, []))}. "
-        text += f"Cuisine: {food.get(cuisine_type, "Unknown")}. "
-        text += f"Cooking Method: {food.get(cooking_method, "")}. "
-        text += f"Taste and Features: {food.get(taste_profile, "")}. "
-        text += f"Health Benefits: {food.get(food_health_benefits, "")}. "
+        food_name = food.get("food_name", f"Food {i}")
+        food_description = food.get("food_description", "")
+        food_ingredients = food.get("food_ingredients", [])
+        cuisine_type = food.get("cuisine_type", "Unknown")
+        cooking_method = food.get("cooking_method", "")
+        taste_profile = food.get("taste_profile", "")
+        food_health_benefits = food.get("food_health_benefits", "")
+        nutrition_factors = food.get("food_nutritional_factors", {})
 
-        nutrition = [f"{key}: {value}" for key, value in food["food_nutritional_factors"].items()]
-        text += f"Nutritional Factors: {", ".join(nutrition)}. "
+        text = f"Name: {food_name}. "
+        text += f"Description: {food_description}. "
+        text += f"Ingredients: {', '.join(food_ingredients)}. "
+        text += f"Cuisine: {cuisine_type}. "
+        text += f"Cooking Method: {cooking_method}. "
+        text += f"Taste and Features: {taste_profile}. "
+        text += f"Health Benefits: {food_health_benefits}. "
 
+        nutrition = [f"{key}: {value}" for key, value in nutrition_factors.items()]
+        text += f"Nutritional Factors: {', '.join(nutrition)}. "
 
         # Ensure Food IDs are unique
-
-        base_id = str(food.get(food_id), i)
+        base_id = str(food.get("food_id", i))
         unique_id = base_id
 
         counter = 1
@@ -124,19 +138,19 @@ def populate_similarity_search(collection, food_items: List[Dict]):
         documents.append(text)
         ids.append(unique_id)
         metadatas.append({
-            "name": food["food_name"],
-            "cuisine_type": food.get("cuisine_type", "Unknown"),
-            "ingredients": ", ".join(food.get("food_ingredients", [])),
+            "name": food_name,
+            "cuisine_type": cuisine_type,
+            "ingredients": ", ".join(food_ingredients),
             "calories": food.get("food_calories_per_serving", 0),
-            "description": food.get("food_description", ""),
-            "cooking_method": food.get("cooking_method", ""),
-            "health_benefits": food.get("food_health_benefits", ""),
-            "taste_profile": food.get("taste_profile", "")
+            "description": food_description,
+            "cooking_method": cooking_method,
+            "health_benefits": food_health_benefits,
+            "taste_profile": taste_profile
         })
 
         collection.add(
-            documents=documents
-            metadatas=metadatas
+            documents=documents,
+            metadatas=metadatas,
             ids=ids
         )
     print(f"Added {len(food_items)} food items to collection")
@@ -244,9 +258,3 @@ def perform_filtered_similarity_search(collection, query: str, cuisine_filter: s
         print(f"Error in filtered search: {e}")
         return []
 
-
-
-
-
-
-print(load_food_data("docs/FoodDataSet.json"))
